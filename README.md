@@ -126,14 +126,17 @@ These checks reduce unsupported extraction, but they do not guarantee that every
 
 ## Requirements
 
-Install the dependencies:
+Python 3.12 or compatible.
+
+Install the project dependencies:
 
 ```powershell
-pip install requests pypdf reportlab
+python -m pip install -r requirements.txt
 ```
 
-`reportlab` is used to generate the fictional sample PDFs.
+This installs the dependencies for the extraction pipeline and Streamlit browser interface.
 
+`reportlab` is used to generate the fictional sample PDFs.
 ## Sample documents
 
 Generate the purchase-agreement samples:
@@ -149,6 +152,70 @@ python make_bid_samples.py
 ```
 
 The generated documents are fictional test data.
+
+## Browser demo (Streamlit)
+
+The project includes a browser-based interface for uploading and processing individual PDF documents.
+
+### Run locally
+
+Start the Streamlit application:
+
+```powershell
+python -m streamlit run app.py
+```
+
+Open the local URL displayed in the terminal, usually:
+
+```text
+http://localhost:8501
+```
+
+### Configure Gemini API access
+
+The browser application uses Google Gemini for document extraction.
+
+For local development, create:
+
+```text
+.streamlit/secrets.toml
+```
+
+Add your Gemini API key:
+
+```toml
+GEMINI_API_KEY = "your-gemini-api-key"
+```
+
+Optionally, specify a model:
+
+```toml
+GEMINI_MODEL = "gemini-3.5-flash"
+```
+
+Keep this file private. It is excluded from Git through `.gitignore`. Never commit or share your API key.
+
+### Use the application
+
+1. Upload a purchase agreement or subcontractor bid PDF.
+2. Select **Extract document**.
+3. Inspect the extracted fields, supporting evidence, and validation results.
+4. Download the structured CSV result.
+
+The application supports PDF uploads up to 20 MB. PDFs without extractable text may not work because OCR is not currently implemented.
+
+Documents are sent to Google Gemini for processing. Only upload documents you are authorized to share.
+
+### Streamlit Community Cloud
+
+To deploy the application, connect the GitHub repository to Streamlit Community Cloud and configure the following secret in the app's deployment settings:
+
+```toml
+GEMINI_API_KEY = "your-gemini-api-key"
+GEMINI_MODEL = "gemini-3.5-flash"
+```
+
+Do not upload `.streamlit/secrets.toml` to GitHub. The deployed application reads its credentials from Streamlit's configured secrets.
 
 ## Running the project
 
@@ -278,7 +345,10 @@ It is a small smoke comparison using three documents, not a statistically meanin
 
 ```text
 contract_extractor/
-|
+|-- app.py
+|-- requirements.txt
+|-- .streamlit/
+|   |-- config.toml
 |-- run.py
 |-- extractors.py
 |-- bid_extractors.py
