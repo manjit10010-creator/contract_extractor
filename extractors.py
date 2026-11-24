@@ -62,6 +62,7 @@ class RuleBasedExtractor:
     """Only understands wording the author thought of in advance."""
 
     name = "rules"
+    model = None  # no model involved; lets run.py treat every extractor the same way
 
     def extract(self, text: str) -> dict:
         r = empty_result()
@@ -134,7 +135,7 @@ class GeminiExtractor:
     def __init__(self, api_key: str | None = None, model: str | None = None):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         # Model names change over time; override with GEMINI_MODEL if this one is rejected.
-        self.model = model or os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+        self.model = model or os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
         if not self.api_key:
             raise RuntimeError("Set GEMINI_API_KEY to use the Gemini extractor.")
 

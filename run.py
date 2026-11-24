@@ -12,7 +12,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from extractors import GeminiExtractor, LLMExtractor, RuleBasedExtractor
+from extractors import GeminiExtractor, LLMExtractor, RuleBasedExtractor, empty_result
 from sinks import push_airtable, to_row, write_csv
 from validate import validate
 
@@ -21,6 +21,23 @@ HERE = Path(__file__).parent
 
 def pdf_text(path: Path) -> str:
     return "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
+
+
+def process_file(pdf: Path, extractor) -> tuple[dict, list[str], dict]:
+    """Run one PDF through extract + validate. Never raises for a bad file.
+
+    If reading the PDF or calling the extractor fails, the file is marked
+    "Needs review" with the original error message, and the batch carries on.
+    """
+    try:
+        rec = extractor.extract(pdf_text(pdf))
+        problems = validate(rec)
+    except Exception as e:  # deliberately broad: one bad file must not stop the batch
+        rec = empty_result()
+        detail = " ".join(str(e).split())[:300]  # keep the real message, on one line
+        problems = [f"processing failed: {type(e).__name__}: {detail}"]
+    row = to_row(pdf.name, rec, problems, extractor=extractor.name, model=extractor.model)
+    return rec, problems, row
 
 
 def main() -> None:
@@ -39,11 +56,10 @@ def main() -> None:
 
     rows = []
     for pdf in pdfs:
-        rec = extractor.extract(pdf_text(pdf))
-        problems = validate(rec)
-        row = to_row(pdf.name, rec, problems)
+        rec, problems, row = process_file(pdf, extractor)
         rows.append(row)
-        print(f"\n{pdf.name}  [{extractor.name}]  -> {row['status']}")
+        model = f" {extractor.model}" if extractor.model else ""
+        print(f"\n{pdf.name}  [{extractor.name}{model}]  -> {row['status']}")
         for k in ("parcel_id", "purchase_price", "effective_date",
                   "due_diligence_deadline", "closing_date"):
             print(f"  {k:24} {rec.get(k)}")

@@ -8,13 +8,16 @@ import requests
 COLUMNS = [
     "file", "status", "seller", "buyer", "parcel_id", "purchase_price",
     "effective_date", "due_diligence_deadline", "closing_date",
-    "contingencies", "problems",
+    "contingencies", "problems", "extractor", "model",
 ]
 
 
-def to_row(filename: str, rec: dict, problems: list[str]) -> dict:
+def to_row(filename: str, rec: dict, problems: list[str],
+           extractor: str | None = None, model: str | None = None) -> dict:
     row = {c: rec.get(c) for c in COLUMNS if c in rec}
     row["file"] = filename
+    row["extractor"] = extractor  # which extractor produced this row (rules / llm / gemini)
+    row["model"] = model          # model identifier, or None for the rule-based extractor
     row["status"] = "Needs review" if problems else "Auto-filed"
     row["contingencies"] = "; ".join(rec.get("contingencies") or [])
     row["problems"] = "; ".join(problems)
