@@ -24,8 +24,12 @@ def check(resp: requests.Response) -> None:
         raise RuntimeError(f"HTTP {resp.status_code} from {resp.url.split('?')[0]}:\n{resp.text[:800]}")
 
 
-def post_with_retry(url: str, retries: int = 3, **kwargs) -> requests.Response:
-    """POST with a long timeout; retry on timeouts and on 429/500/503 with a short backoff."""
+def post_with_retry(url: str, retries: int = 5, **kwargs) -> requests.Response:
+    """POST with a long timeout; retry on timeouts and on 429/500/503.
+
+    Waits 5, 10, 20, 40 seconds between the five attempts, because overload errors
+    from the API (503) often last longer than a few seconds.
+    """
     import time
     kwargs.setdefault("timeout", 180)
     for attempt in range(1, retries + 1):
@@ -38,7 +42,7 @@ def post_with_retry(url: str, retries: int = 3, **kwargs) -> requests.Response:
             if attempt == retries:
                 raise
             print(f"  ({type(e).__name__}, retrying {attempt}/{retries - 1}...)")
-        time.sleep(5 * attempt)
+        time.sleep(5 * 2 ** (attempt - 1))
 
 
 def empty_result() -> dict:

@@ -139,6 +139,25 @@ class GeminiExtractorTests(unittest.TestCase):
         self.assertEqual(rec["parcel_id"], "12-34-567-890")
 
 
+class RetryTests(unittest.TestCase):
+    def test_persistent_503_is_tried_five_times_with_growing_waits_then_reported(self):
+        busy = FakeResponse(503, text='{"error": {"message": "high demand"}}')
+        with mock.patch("extractors.requests.post", return_value=busy) as post, \
+                mock.patch("time.sleep") as sleep:
+            with self.assertRaises(RuntimeError) as ctx:
+                GeminiExtractor(api_key="test").extract("contract text")
+        self.assertEqual(post.call_count, 5)
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [5, 10, 20, 40])
+        self.assertIn("high demand", str(ctx.exception))
+
+    def test_a_rejected_key_is_not_retried(self):
+        bad = FakeResponse(403, text='{"error": {"message": "API key not valid"}}')
+        with mock.patch("extractors.requests.post", return_value=bad) as post:
+            with self.assertRaises(RuntimeError):
+                GeminiExtractor(api_key="test").extract("contract text")
+        self.assertEqual(post.call_count, 1)
+
+
 class ProcessFileTests(unittest.TestCase):
     def test_extractor_failure_goes_to_review_with_original_message(self):
         class Boom:
