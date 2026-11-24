@@ -1,0 +1,4 @@
+﻿"file","status","seller","buyer","parcel_id","purchase_price","effective_date","due_diligence_deadline","closing_date","contingencies","problems","evidence","extractor","model"
+"contract_a_explicit_dates.pdf","Auto-filed","Riverbend Holdings LLC","","12-34-567-890","1250000.0","2027-01-10","2027-02-09","2027-03-15","","","","rules",""
+"contract_b_relative_dates.pdf","Needs review","","","45-67-890-123","","2027-03-01","","","","missing required field: purchase_price; missing required field: closing_date","","rules",""
+"contract_c_messy_wording.pdf","Needs review","","","","","","","","","missing required field: parcel_id; missing required field: purchase_price; missing required field: closing_date","","rules",""
