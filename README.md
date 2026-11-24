@@ -1,11 +1,13 @@
-# Contract Extractor
+﻿# Contract Extractor
 
-A Python demo that extracts structured information from two types of PDF documents:
+A Python document-processing pipeline that extracts structured data from PDF documents across two workflows:
 
-1. **Real-estate purchase agreements**
-2. **Subcontractor construction bids**
+- **Real-estate purchase agreements**
+- **Subcontractor construction bids**
 
-The pipeline classifies each document, extracts its fields, validates the results, checks supporting evidence, and writes separate CSV files. Records with missing, ambiguous, invalid, or unsupported information are sent for human review instead of being automatically filed.
+The pipeline combines document classification, AI-assisted extraction, deterministic validation, and source-evidence checks. It produces separate CSV outputs and routes incomplete, ambiguous, invalid, or unsupported records to human review rather than automatically filing uncertain information.
+
+**Core principle:** AI extracts. Deterministic checks verify. Humans resolve uncertainty.
 
 ## Portfolio demonstration
 
