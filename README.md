@@ -7,6 +7,28 @@ A Python demo that extracts structured information from two types of PDF documen
 
 The pipeline classifies each document, extracts its fields, validates the results, checks supporting evidence, and writes separate CSV files. Records with missing, ambiguous, invalid, or unsupported information are sent for human review instead of being automatically filed.
 
+## Portfolio demonstration
+
+Explore the [complete demonstration](./demo/README.md), including fictional source PDFs and curated extraction results.
+
+The demonstration contains seven documents across two workflows:
+
+| Document type | Auto-filed | Needs review |
+|---|---:|---:|
+| Purchase agreements | 1 | 2 |
+| Subcontractor bids | 2 | 2 |
+| **Total** | **3** | **4** |
+
+The examples demonstrate successful extraction as well as missing information, conflicting bid amounts, and unresolved commercial terms.
+
+**[View demonstration files](./demo/)**
+
+## System architecture
+
+The following diagram illustrates the complete extraction workflow, from PDF input through validation and final CSV output.
+
+![Contract Extractor Architecture](docs/contract_extractor_architecture.png)
+
 ## How it works
 
 ```text
