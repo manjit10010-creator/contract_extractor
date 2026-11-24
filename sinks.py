@@ -2,7 +2,7 @@
 import csv
 import os
 from pathlib import Path
-
+import json
 import requests
 
 COLUMNS = [
@@ -51,3 +51,45 @@ def push_airtable(rows: list[dict]) -> int:
         resp.raise_for_status()
         sent += len(batch)
     return sent
+
+
+BID_COLUMNS = [
+    "file", "status", "project_name", "contractor_name",
+    "contact_name", "contact_email", "trade", "base_bid_amount",
+    "currency", "alternates", "allowances", "inclusions",
+    "exclusions", "proposed_duration_days", "quote_valid_until",
+    "payment_terms", "clarifications", "problems", "evidence",
+    "extractor", "model",
+]
+
+
+def bid_to_row(filename: str, rec: dict, problems: list[str],
+               extractor: str | None = None, model: str | None = None,
+               evidence: str = "") -> dict:
+    """Convert a subcontractor bid into its own CSV row."""
+    row = {column: rec.get(column) for column in BID_COLUMNS}
+    row["file"] = filename
+    row["status"] = "Needs review" if problems else "Auto-filed"
+
+    for field in (
+        "alternates", "allowances", "inclusions",
+        "exclusions", "clarifications",
+    ):
+        row[field] = json.dumps(rec.get(field) or [], ensure_ascii=False)
+
+    row["problems"] = "; ".join(problems)
+    row["evidence"] = evidence
+    row["extractor"] = extractor
+    row["model"] = model
+
+    return row
+
+
+def write_bid_csv(rows: list[dict], path: Path) -> None:
+    """Write bid records without changing the purchase-agreement CSV."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=BID_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)

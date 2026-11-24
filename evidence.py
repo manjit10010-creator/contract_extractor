@@ -184,3 +184,184 @@ def format_evidence(items: list[dict]) -> str:
         else:
             parts.append(f'{it["field"]} [{it["basis"]}]: "{quote}"')
     return " | ".join(parts)
+
+
+BID_TEXT_FIELDS = (
+    "project_name",
+    "contractor_name",
+    "contact_name",
+    "contact_email",
+    "trade",
+    "currency",
+    "payment_terms",
+)
+
+BID_NUMBER_FIELDS = (
+    "base_bid_amount",
+    "proposed_duration_days",
+)
+
+BID_DATE_FIELDS = ("quote_valid_until",)
+
+BID_LIST_TEXT_FIELDS = (
+    "inclusions",
+    "exclusions",
+    "clarifications",
+)
+
+
+def _bid_number_supported(value, quotes: str) -> bool:
+    """Check whether a numeric value appears in the supporting quotes."""
+    try:
+        number = float(str(value).replace(",", "").replace("$", "").strip())
+    except (TypeError, ValueError):
+        return False
+
+    return number in _numbers(quotes)
+
+
+def _judge_bid(field: str, value, quotes: list[str],
+               source: str) -> tuple[str, str | None, str]:
+    """Verify bid evidence without applying purchase-agreement date rules."""
+    if not quotes:
+        return "missing", f"no evidence given for {field}", "extracted"
+
+    for quote in quotes:
+        loose = _loose(quote)
+        if len(loose) < MIN_QUOTE_LEN or loose not in source:
+            return (
+                "unsupported",
+                f"evidence for {field} not found in source text: {_short(quote)!r}",
+                "extracted",
+            )
+
+    joined = " ".join(quotes)
+
+    if field in BID_TEXT_FIELDS:
+        if _loose(str(value)) not in _loose(joined):
+            return (
+                "unsupported",
+                f"evidence for {field} does not contain the value {value!r}",
+                "extracted",
+            )
+
+    elif field in BID_NUMBER_FIELDS:
+        if not _bid_number_supported(value, joined):
+            return (
+                "unsupported",
+                f"evidence for {field} does not contain the amount {value!r}",
+                "extracted",
+            )
+
+    elif field in BID_DATE_FIELDS:
+        try:
+            target = date.fromisoformat(value)
+        except (TypeError, ValueError):
+            return (
+                "unsupported",
+                f"{field} is not a valid ISO date: {value!r}",
+                "extracted",
+            )
+
+        stated = set().union(*(_stated_dates(q) for q in quotes))
+        if target not in stated:
+            shown = ", ".join(sorted(d.isoformat() for d in stated)) or "no explicit date"
+            return (
+                "unsupported",
+                f"evidence for {field} states {shown} but the value is {value}",
+                "extracted",
+            )
+
+    elif field in BID_LIST_TEXT_FIELDS:
+        if not isinstance(value, list):
+            return (
+                "unsupported",
+                f"{field} must be a list",
+                "extracted",
+            )
+
+        for item in value:
+            if not isinstance(item, str) or _loose(item) not in _loose(joined):
+                return (
+                    "unsupported",
+                    f"evidence for {field} does not contain item {item!r}",
+                    "extracted",
+                )
+
+    elif field in ("alternates", "allowances"):
+        if not isinstance(value, list):
+            return (
+                "unsupported",
+                f"{field} must be a list",
+                "extracted",
+            )
+
+        for item in value:
+            if not isinstance(item, dict):
+                return (
+                    "unsupported",
+                    f"{field} contains an item that is not an object",
+                    "extracted",
+                )
+
+            description = item.get("description")
+            amount = item.get("amount")
+
+            if not isinstance(description, str) or _loose(description) not in _loose(joined):
+                return (
+                    "unsupported",
+                    f"evidence for {field} does not contain description {description!r}",
+                    "extracted",
+                )
+
+            if amount is not None and not _bid_number_supported(amount, joined):
+                return (
+                    "unsupported",
+                    f"evidence for {field} does not contain amount {amount!r}",
+                    "extracted",
+                )
+
+    return "verified", None, "extracted"
+
+
+def check_bid_evidence(rec: dict, text: str) -> tuple[list[str], list[dict]]:
+    """Check evidence for subcontractor bid fields."""
+    if "evidence" not in rec:
+        return [], []
+
+    evidence = rec["evidence"] if isinstance(rec["evidence"], dict) else {}
+    source = _loose(text)
+
+    fields = (
+        *BID_TEXT_FIELDS,
+        *BID_NUMBER_FIELDS,
+        *BID_DATE_FIELDS,
+        *BID_LIST_TEXT_FIELDS,
+        "alternates",
+        "allowances",
+    )
+
+    problems = []
+    items = []
+
+    for field in fields:
+        value = rec.get(field)
+
+        if value in (None, "", []):
+            continue
+
+        quotes = _quotes(evidence.get(field))
+        status, problem, basis = _judge_bid(field, value, quotes, source)
+
+        items.append({
+            "field": field,
+            "value": value,
+            "quotes": quotes,
+            "status": status,
+            "basis": basis,
+        })
+
+        if problem:
+            problems.append(problem)
+
+    return problems, items

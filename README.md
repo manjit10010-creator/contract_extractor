@@ -1,48 +1,293 @@
-# Contract Extractor (demo)
+# Contract Extractor
 
-Reads purchase-agreement PDFs, pulls out the key terms, checks them with plain rules,
-and writes a CSV (and optionally Airtable rows). Built to show where an LLM helps and
-where ordinary code should stay in charge.
+A Python demo that extracts structured information from two types of PDF documents:
 
+1. **Real-estate purchase agreements**
+2. **Subcontractor construction bids**
+
+The pipeline classifies each document, extracts its fields, validates the results, checks supporting evidence, and writes separate CSV files. Records with missing, ambiguous, invalid, or unsupported information are sent for human review instead of being automatically filed.
+
+## How it works
+
+```text
+PDF
+ |
+ v
+Extract text with pypdf
+ |
+ v
+Classify document
+ |
+ +---------------------------+
+ |                           |
+ v                           v
+Purchase agreement       Subcontractor bid
+ |                           |
+ v                           v
+Rules / Claude / Gemini  Claude / Gemini
+ |                           |
+ v                           v
+Purchase validation      Bid validation
+ |                           |
+ v                           v
+Evidence verification    Evidence verification
+ |                           |
+ +-------------+-------------+
+               |
+               v
+        Auto-file or review
+               |
+        +------+------+
+        |             |
+        v             v
+  output/results.csv  output/bids.csv
 ```
-PDF -> text (pypdf) -> EXTRACT (rules or Claude) -> VALIDATE (plain rules) -> CSV / Airtable
-                                                        |
-                                              problems? -> "Needs review"
+
+## Features
+
+### Purchase-agreement extraction
+
+Extracts:
+
+- Seller and buyer
+- Parcel ID
+- Purchase price
+- Effective date
+- Due-diligence deadline
+- Closing date
+- Contingencies
+
+Available extractors:
+
+- Rule-based extraction
+- Claude
+- Gemini
+
+### Subcontractor-bid extraction
+
+Extracts:
+
+- Project and contractor names
+- Contact name and email
+- Trade
+- Base bid amount and currency
+- Alternates and allowances
+- Inclusions and exclusions
+- Proposed duration
+- Quote-validity date
+- Payment terms
+- Clarifications
+
+Available extractors:
+
+- Claude
+- Gemini
+
+The rule-based extractor does not extract bid details. Bid documents processed in rules mode are sent for review.
+
+### Validation and evidence checks
+
+The project separates AI extraction from deterministic checks.
+
+- Required fields and data formats are validated.
+- Bid amounts, currency, dates, durations, and structured lists are checked.
+- Extracted values must have supporting evidence where evidence checking applies.
+- Evidence quotes must appear in the source document and support the extracted value.
+- Calculated purchase-agreement dates are sent for human review.
+- Ambiguous or conflicting bid totals are sent for human review.
+- Incomplete bids are sent for review when contact details, duration, quote validity, or usable payment terms are missing.
+- Unknown document types are not guessed.
+
+These checks reduce unsupported extraction, but they do not guarantee that every semantic interpretation is correct. Human review remains important.
+
+## Requirements
+
+Install the dependencies:
+
+```powershell
+pip install requests pypdf reportlab
 ```
 
-## Run it
+`reportlab` is used to generate the fictional sample PDFs.
 
-```bash
-pip install requests pypdf reportlab     # reportlab only for make_samples.py
-python make_samples.py                   # makes 3 fake contracts with different wording
-python run.py                            # rule-based baseline, no API key needed
-export ANTHROPIC_API_KEY=sk-ant-...
-python run.py --extractor llm            # Claude reads the contracts
-python -m unittest discover -s tests
+## Sample documents
+
+Generate the purchase-agreement samples:
+
+```powershell
+python make_samples.py
 ```
 
-Optional Airtable push: create a table whose fields match the CSV columns, then set
-`AIRTABLE_TOKEN`, `AIRTABLE_BASE_ID`, `AIRTABLE_TABLE` and add `--airtable`.
+Generate the subcontractor-bid samples:
 
-## What to expect
+```powershell
+python make_bid_samples.py
+```
 
-Rule-based baseline on the samples: contract A (explicit dates) is filed; B ("30 days
-after the expiration of the Due Diligence Period", price written in words) and C ("the
-fifteenth day of May, 2027") fail validation and go to review. The LLM extractor should
-resolve them: B closes 2027-05-15 (Mar 1 + 45 days = Apr 15, + 30 days), C closes 2027-06-30.
-Check this yourself when you run it; I could not run the LLM mode without an API key.
+The generated documents are fictional test data.
 
-## Design choices
+## Running the project
 
-- The LLM only does the fuzzy reading. Dates, price range, parcel format and date
-  ordering are checked by `validate.py`, which is deterministic.
-- Anything that fails validation is marked "Needs review" rather than written as fact.
-- The LLM is told to return null instead of guessing, and to quote the evidence phrase
-  for each field so a human can verify it quickly.
+### 1. Rule-based purchase extraction
 
-## Next steps
+```powershell
+python run.py
+```
 
-- Scanned PDFs: add OCR (e.g. pytesseract) when `pypdf` returns no text.
-- Add a human-approval step before rows reach the real tracker.
-- Smartsheet sink (same shape as `push_airtable`).
-- Score the LLM against 20+ hand-labelled contracts and track accuracy per field.
+This uses the default `sample_contracts` directory and writes:
+
+```text
+output/results.csv
+```
+
+Subcontractor bids encountered in rules mode are routed to review because the rule-based extractor does not support bid extraction.
+
+### 2. Claude extraction
+
+Set your API key in PowerShell:
+
+```powershell
+$env:ANTHROPIC_API_KEY = "your-api-key"
+```
+
+Run:
+
+```powershell
+python run.py --extractor llm
+```
+
+Claude is used for both purchase agreements and subcontractor bids.
+
+### 3. Gemini extraction
+
+Set your API key:
+
+```powershell
+$env:GEMINI_API_KEY = "your-api-key"
+```
+
+Run:
+
+```powershell
+python run.py --extractor gemini
+```
+
+Gemini is used for both document types.
+
+### 4. Process subcontractor bids only
+
+```powershell
+python run.py --extractor gemini --pdf-dir .\sample_bids
+```
+
+This writes the bid results to:
+
+```text
+output/bids.csv
+```
+
+### 5. Run the offline tests
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+The tests use mocked model responses where appropriate, so they do not require live API calls.
+
+## Command-line options
+
+| Option | Purpose |
+|---|---|
+| `--extractor rules` | Rule-based purchase extraction |
+| `--extractor llm` | Claude extraction |
+| `--extractor gemini` | Gemini extraction |
+| `--pdf-dir PATH` | Select the directory containing PDFs |
+| `--out PATH` | Set the purchase-agreement CSV path |
+| `--bid-out PATH` | Set the subcontractor-bid CSV path |
+| `--airtable` | Push purchase-agreement rows to Airtable |
+
+View all options:
+
+```powershell
+python run.py --help
+```
+
+Purchase agreements and bids are written to separate CSV files because they have different schemas.
+
+## Optional Airtable integration
+
+The existing Airtable integration supports purchase-agreement rows only.
+
+Configure these PowerShell environment variables:
+
+```powershell
+$env:AIRTABLE_TOKEN = "your-token"
+$env:AIRTABLE_BASE_ID = "your-base-id"
+$env:AIRTABLE_TABLE = "your-table-name"
+```
+
+Then run:
+
+```powershell
+python run.py --airtable
+```
+
+The Airtable table's field names must match the purchase CSV columns.
+
+Bid rows are not sent to Airtable because the existing Airtable schema is purchase-specific.
+
+## Model comparison
+
+The project also includes a Gemini model comparison utility for the fictional purchase-agreement samples.
+
+Example:
+
+```powershell
+python compare_models.py gemini-3.5-flash gemini-3.1-flash-lite
+```
+
+This makes live API calls and requires `GEMINI_API_KEY`.
+
+It is a small smoke comparison using three documents, not a statistically meaningful accuracy benchmark.
+
+## Project structure
+
+```text
+contract_extractor/
+|
+|-- run.py
+|-- extractors.py
+|-- bid_extractors.py
+|-- bid_schema.py
+|-- classification.py
+|-- validate.py
+|-- evidence.py
+|-- sinks.py
+|-- compare_models.py
+|
+|-- make_samples.py
+|-- make_bid_samples.py
+|
+|-- sample_contracts/
+|-- sample_bids/
+|
+|-- tests/
+|-- output/
+|
+|-- README.md
+```
+
+## Current limitations
+
+- Scanned PDFs without an embedded text layer are not processed through OCR.
+- Document classification uses conservative text patterns and may send unfamiliar documents to review.
+- Evidence verification uses deterministic text checks. It cannot fully establish whether every extracted statement has been interpreted correctly.
+- Calculated dates and ambiguous commercial terms require human judgment.
+- The sample documents are fictional and do not establish production accuracy.
+- Airtable currently supports purchase agreements, not subcontractor bids.
+
+## Design principle
+
+**AI reads the document; deterministic code checks the result; a human handles uncertainty.**
+
+The goal is not to automate every decision. It is to automate the reliable parts while making uncertain or unsupported information visible before it enters a business workflow.
