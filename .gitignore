@@ -1,0 +1,17 @@
+# secrets
+.env
+*.key
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# generated output
+output/
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
